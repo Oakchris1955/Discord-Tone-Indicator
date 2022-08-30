@@ -1,5 +1,5 @@
 from bs4 import BeautifulSoup
-import requests;
+import requests
 
 import discord
 from discord import app_commands
