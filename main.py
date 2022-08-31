@@ -1,6 +1,8 @@
 from bs4 import BeautifulSoup
 import requests
 
+import itertools
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -11,13 +13,13 @@ from dotenv import dotenv_values
 TONE_WEBSITE_URL = "https://r74n.com/words/twitter"
 
 
-'''class Tone:
-	def __init__(self, indicator: str, meaning: str):
-		self.indicator = indicator
+class Tone:
+	def __init__(self, indicators: [str], meaning: str):
+		self.indicators = indicators
 		self.meaning = meaning
 	
 	def __repr__(self):
-		return f"{self.indicator} - {self.meaning}\n"'''
+		return f"{', '.join(indicator for indicator in self.indicators)} - {self.meaning}\n"
 
 class MyClient(discord.Client):
 	def __init__(self, *, intents: discord.Intents):
@@ -34,15 +36,22 @@ class MyClient(discord.Client):
 		await self.tree.sync()
 		print("Synced commands")
 
+	async def match_indicator(self, indicator: str):
+		for tone in self.tones:
+			if indicator in tone.indicators:
+				return tone
+
 	async def stringify_tones(self) -> str:
 		tones_string = f"Total tones indicators found: `{len(self.tones)}`\n"
-		for indicator, meaning in self.tones.items():
-			tones_string += f"`{indicator}` - {meaning}\n"
+		
+		for tone in self.tones:
+			tones_string += f"`{', '.join(indicator for indicator in tone.indicators)}` - {tone.meaning}\n"
+		print(tones_string)
 		return tones_string
 
 
 
-def load_tones() -> {str: str} or None :
+def load_tones() -> [Tone] or None :
 	tone_website_response = requests.get(TONE_WEBSITE_URL)
 	if tone_website_response.status_code != 200:
 		return None
@@ -51,18 +60,21 @@ def load_tones() -> {str: str} or None :
 		parsed_website = BeautifulSoup(website_text, "html.parser")
 		tone_string = parsed_website.body.find("h3", id="Tone").next_sibling.next_sibling.text # First next sibling is newline, so we skip it
 		
-		'''tones_list = []
+		tones_list = []
+		i=0
 		for line in tone_string.splitlines():
-			(indicator, meaning) = line.split(" - ")
-			tones_list.append(Tone(indicator, meaning))
-		return tones_list'''
-		tones_dict = {}
+			(indicators, meaning) = line.split(" - ")
+			tones_list.append(Tone(indicators.split(", "), meaning))
+			print(type(tones_list[i]))
+			i+=1
+		return tones_list
+		'''tones_dict = {}
 		
 		for line in tone_string.splitlines():
 			(indicators, meaning) = line.split(" - ")
 			for indicator in indicators.split(", "):
 				tones_dict[indicator] = meaning
-		return tones_dict
+		return tones_dict'''
 
 
 intents = discord.Intents.default()
@@ -77,8 +89,10 @@ async def get_meaning(interaction: discord.Interaction, indicator: str):
 	if indicator[0] != "/":
 		indicator = "/"+indicator
 
-	if indicator in interaction.client.tones.keys():
-		await interaction.response.send_message(f"`{indicator}` means {interaction.client.tones[indicator]}", ephemeral=True)
+	indicators_list = itertools.chain.from_iterable(tone.indicators for tone in interaction.client.tones)
+
+	if indicator in indicators_list:
+		await interaction.response.send_message(f"`{indicator}` means {str(await interaction.client.match_indicator(indicator)).meaning}", ephemeral=True)
 	else:
 		await interaction.response.send_message(f"The requested tone indicator `{indicator}` doesn't exist", ephemeral=True)
 
